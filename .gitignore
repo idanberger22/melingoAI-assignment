@@ -1,0 +1,7 @@
+/node_modules
+/.env
+/clients/firebase-account.json
+/clients/firebase-service-account.json
+/clients/google-service.json
+/soulKiller
+soulkiller
