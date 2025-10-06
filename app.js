@@ -19,10 +19,7 @@ app.use(morgan('dev'))
 app.use(express.static(path.join(__dirname, 'public')))
 app.use(limiter)
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' ?
-    ["https://pikme.tv", 'https://create.pikme.tv', 'https://quiz.pikme.tv', 'https://career-h072.onrender.com', 'https://saltiz.store'] :
-    ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8081', 'http://localhost:8082', 'http://10.0.2.2:8081', 'http://127.0.0.1:8081', 'http://192.168.1.29'],
-  credentials: true
+  origin: '*',
 }
 app.use(cors(corsOptions))
 app.use('/suggestions', suggestions)
