@@ -23,6 +23,10 @@ const corsOptions = {
   credentials: true
 }
 app.use(cors(corsOptions))
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  next()
+})
 app.use('/suggestions', suggestions)
 app.get('/test', async (req, res) => {
   res.json({ message: 'Hello World' })
