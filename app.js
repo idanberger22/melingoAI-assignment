@@ -16,7 +16,14 @@ app.use(helmet())
 app.use(bodyParser1.urlencoded({ extended: false }))
 app.use(bodyParser1.json())
 app.use(morgan('dev'))
-app.use(express.static(path.join(__dirname, 'public')))
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+    },
+  })
+)
+
 app.use(limiter)
 const corsOptions = {
   origin: ['https://berger-store-2.myshopify.com', 'https://myshopify.com', 'http://localhost:3000'],
