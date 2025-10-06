@@ -19,7 +19,8 @@ app.use(morgan('dev'))
 app.use(express.static(path.join(__dirname, 'public')))
 app.use(limiter)
 const corsOptions = {
-  origin: '*',
+  origin: ['https://berger-store-2.myshopify.com', 'https://myshopify.com', 'http://localhost:3000'],
+  credentials: true
 }
 app.use(cors(corsOptions))
 app.use('/suggestions', suggestions)
