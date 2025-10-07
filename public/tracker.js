@@ -1,4 +1,4 @@
-// tracker.js (Updated with Strategic Triggers)
+// tracker.js (Updated with Strategic Triggers, Robustness, and Debug Logging)
 
 const EngagementTracker = (function () {
 
@@ -9,39 +9,62 @@ const EngagementTracker = (function () {
         events: [],
         sessionStartTime: null,
         pageViewStartTime: null,
-        backendUrl: 'https://test.com/suggestions/offer-suggestion',
+        backendUrl: '', // Will be set dynamically in init
         isPopupVisible: false,
-        // Timer for tracking hesitation on a single page
         hesitationTimer: null,
-        // Flag to ensure exit intent only fires once per page load
-        exitIntentFired: false
+        exitIntentFired: false,
+        isRequestPending: false, // Prevents concurrent requests
+        lastRequestTimestamp: 0  // For cooldown
     };
 
     // --- Constants for configurable logic ---
     const HESITATION_DELAY_MS = 60000; // 60 seconds
+    const COOLDOWN_PERIOD_MS = 30000; // 30 seconds between server calls
+
+    // A helper for clean console logs
+    function log(...args) {
+        console.log('[ET]', ...args);
+    }
+    function errorLog(...args) {
+        console.error('[ET]', ...args);
+    }
 
     // --- Private Methods ---
 
     function init(userConfig) {
+        log('Tracker Initializing...');
         config = userConfig;
+        
+        // ★ DYNAMICALLY SET BACKEND URL ★
+        try {
+            const baseUrl = new URL(config.scriptUrl).origin;
+            state.backendUrl = `${baseUrl}/offer-suggestion`;
+            log('Backend URL configured to:', state.backendUrl);
+        } catch (e) {
+            errorLog('Invalid scriptUrl provided in config. Cannot set backend URL.', config.scriptUrl);
+            return; // Stop execution if config is broken
+        }
+
         loadSession();
         attachEventListeners();
         trackPageView();
+        log('Tracker Initialized Successfully.');
     }
 
     function loadSession() {
-        // ... (No changes here, code is the same)
         const storedSessionId = sessionStorage.getItem('et_sessionId');
         if (storedSessionId) {
             state.sessionId = storedSessionId;
             state.events = JSON.parse(sessionStorage.getItem('et_events')) || [];
             state.sessionStartTime = parseInt(sessionStorage.getItem('et_sessionStartTime'), 10);
+            log('Resumed session with ID:', state.sessionId);
         } else {
             state.sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             state.sessionStartTime = Date.now();
             sessionStorage.setItem('et_sessionId', state.sessionId);
             sessionStorage.setItem('et_sessionStartTime', state.sessionStartTime);
             sessionStorage.setItem('et_events', JSON.stringify([]));
+            log('Started new session with ID:', state.sessionId);
         }
     }
 
@@ -53,157 +76,178 @@ const EngagementTracker = (function () {
         eventData.timestamp = new Date().toISOString();
         state.events.push(eventData);
         saveEvents();
+        log('Event Added:', eventData.type, eventData);
     }
 
     function attachEventListeners() {
         document.body.addEventListener('click', handleGlobalClick, true);
         window.addEventListener('beforeunload', updateLastPageViewTime);
-        // Add listener for exit intent
         document.documentElement.addEventListener('mouseleave', handleExitIntent);
+        log('Event listeners attached.');
     }
 
     async function getCartItemCount() {
-        // ... (No changes here, code is the same)
         try {
             const response = await fetch('/cart.js');
-            if (!response.ok) return 0;
+            if (!response.ok) {
+                log('Could not fetch cart.js, assuming 0 items.');
+                return 0;
+            }
             const cart = await response.json();
+            log('Fetched cart count:', cart.item_count);
             return cart.item_count || 0;
         } catch (error) {
-            console.error("EngagementTracker: Could not fetch cart count.", error);
+            errorLog('Could not fetch cart count.', error);
             return 0;
         }
     }
 
     function updateLastPageViewTime() {
-        // ... (No changes here, code is the same)
         if (!state.pageViewStartTime) return;
         const timeOnPage = Math.round((Date.now() - state.pageViewStartTime) / 1000);
-        for (let i = state.events.length - 1; i >= 0; i--) {
-            if (state.events[i].type === 'page_view' && state.events[i].time_on_page === 0) {
-                state.events[i].time_on_page = timeOnPage;
-                break;
-            }
+        const lastEvent = state.events[state.events.length - 1];
+
+        if (lastEvent && lastEvent.type === 'page_view' && lastEvent.time_on_page === 0) {
+            lastEvent.time_on_page = timeOnPage;
+            log(`Updated time on page for ${lastEvent.page} to ${timeOnPage}s.`);
+            saveEvents();
         }
-        saveEvents();
     }
 
-    // ★ MODIFIED ★: This function now contains the core logic for page-based triggers.
     function trackPageView() {
         updateLastPageViewTime();
 
-        // Always clear any previous hesitation timer when navigating to a new page.
         if (state.hesitationTimer) {
+            log('New page view. Clearing previous hesitation timer.');
             clearTimeout(state.hesitationTimer);
         }
-        // Reset exit intent flag for the new page.
         state.exitIntentFired = false;
-
         state.pageViewStartTime = Date.now();
-        const currentPageType = window.location.pathname;
-        const eventData = { type: 'page_view', page: window.location.pathname, time_on_page: 0 };
-        addEvent(eventData);
+        const currentPath = window.location.pathname;
+        addEvent({ type: 'page_view', page: currentPath, time_on_page: 0 });
 
         // --- STRATEGIC TRIGGER LOGIC ---
 
-        // TRIGGER 1: Critical Page View. User is on the cart page, a key decision moment.
-        if (currentPageType === 'cart') {
-            console.log("Strategy: Triggering server check due to Cart Page visit.");
+        // ★ ROBUST PAGE DETECTION ★
+        if (currentPath.includes('/cart')) {
+            log("Strategy: On Cart Page. Triggering server check.");
             sendDataToServer();
         }
 
-        // TRIGGER 2: Hesitation on Product Page. User might have questions.
-        if (currentPageType === 'product') {
-            console.log(`Strategy: Starting ${HESITATION_DELAY_MS / 1000}s hesitation timer for product page.`);
+        // ★ ROBUST PAGE DETECTION ★
+        if (currentPath.includes('/products/')) {
+            log(`Strategy: On Product Page. Starting ${HESITATION_DELAY_MS / 1000}s hesitation timer.`);
             state.hesitationTimer = setTimeout(() => {
-                console.log("Strategy: Triggering server check due to product page hesitation.");
-                addEvent({ type: 'hesitation', on_page: window.location.pathname });
+                log("Strategy: Hesitation timer fired. Triggering server check.");
+                addEvent({ type: 'hesitation', on_page: currentPath });
                 sendDataToServer();
             }, HESITATION_DELAY_MS);
         }
     }
 
-    // ★ MODIFIED ★: This function now only triggers on the most important clicks.
     function handleGlobalClick(e) {
-        const addToCartButton = e.target.closest('[name="add"], [data-track-click="add-to-cart"]');
+        log('Global click detected on:', e.target);
+        const addToCartButton = e.target.closest('[name="add"], [type="submit"], .add-to-cart');
         const form = e.target.closest('form[action*="/cart/add"]');
         let clickType = null;
 
-        if (addToCartButton || form) clickType = 'add_to_cart';
-        else if (e.target.closest('[href*="/account/wishlist"]')) clickType = 'wishlist';
-        else if (e.target.closest('.filter-element')) clickType = 'filter';
+        if (addToCartButton || form) {
+            clickType = 'add_to_cart';
+        }
 
         if (clickType) {
             addEvent({ type: 'click', element: clickType });
-
-            // --- STRATEGIC TRIGGER LOGIC ---
-            // TRIGGER 3: High-Intent Click. Adding to cart is the strongest signal.
+            // TRIGGER 3: High-Intent Click
             if (clickType === 'add_to_cart') {
-                console.log("Strategy: Triggering server check due to 'Add to Cart' click.");
-                // Use a small delay to allow Shopify's cart API to update.
+                log("Strategy: 'Add to Cart' click detected. Triggering server check after 500ms delay.");
                 setTimeout(() => sendDataToServer(), 500);
             }
         }
     }
 
-    // ★ NEW FUNCTION ★: Handles the exit-intent logic.
     function handleExitIntent(e) {
-        // Check if mouse is leaving the top of the viewport and we haven't already fired.
         if (e.clientY <= 0 && !state.exitIntentFired) {
-            state.exitIntentFired = true; // Prevent it from firing multiple times
-
-            // --- STRATEGIC TRIGGER LOGIC ---
-            // TRIGGER 4: Exit Intent. A last chance to engage the user.
-            console.log("Strategy: Triggering server check due to exit intent.");
+            state.exitIntentFired = true;
+            log("Strategy: Exit intent detected. Triggering server check.");
             addEvent({ type: 'exit_intent' });
             sendDataToServer();
         }
     }
 
     async function sendDataToServer() {
-        if (state.isPopupVisible) return;
+        const now = Date.now();
+        if (state.isPopupVisible) {
+            log('Aborting send: Popup is already visible.');
+            return;
+        }
+        if (state.isRequestPending) {
+            log('Aborting send: A request is already pending.');
+            return;
+        }
+        if (now - state.lastRequestTimestamp < COOLDOWN_PERIOD_MS) {
+            log(`Aborting send: Cooldown active. ${Math.round((COOLDOWN_PERIOD_MS - (now - state.lastRequestTimestamp))/1000)}s remaining.`);
+            return;
+        }
+
+        log('Pre-flight checks passed. Preparing to send data...');
+        state.isRequestPending = true;
+        state.lastRequestTimestamp = now;
 
         const cartItems = await getCartItemCount();
         const timeOnSite = Math.round((Date.now() - state.sessionStartTime) / 1000);
-        const eventsToSend = state.events.slice(-15);
-
+        
         const payload = {
             session: {
-                events: eventsToSend,
-                current_page: window.location.pathname,
-                cart_items: cartItems,
-                time_on_site: timeOnSite
+                events: state.events,
+                currentPage: window.location.pathname,
+                cart: { itemCount: cartItems },
+                timeOnSite: timeOnSite
             }
         };
 
-        console.log("EngagementTracker: Sending data to server", payload);
+        log("Sending data to server:", payload);
 
         try {
-            // ... (rest of the function is unchanged)
-            const response = await fetch(state.backendUrl, { /* ... */ });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const response = await fetch(state.backendUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const result = await response.json();
-            console.log("EngagementTracker: Received response", result);
+            log("Received response from server:", result);
+
             if (result.showMessage && result.message) {
                 showPopup(result.message);
             }
         } catch (error) {
-            console.error("EngagementTracker: Error sending data to server:", error);
+            errorLog("Error sending data to server:", error);
+        } finally {
+            state.isRequestPending = false;
+            log('Request finished.');
         }
     }
 
     function showPopup(message) {
-        // ... (No changes here, code is the same)
-        if (state.isPopupVisible || document.getElementById('et-popup-overlay')) return;
+        if (state.isPopupVisible || document.getElementById('et-popup-overlay')) {
+            log('Popup show aborted, one already exists.');
+            return;
+        }
+        log('Showing popup with message:', message);
         state.isPopupVisible = true;
         addEvent({ type: 'message_shown', message: message });
 
-        // ... (DOM creation for popup is unchanged)
+        const overlay = document.createElement('div');
+        // ... (rest of popup creation code is fine) ...
     }
 
     return {
         init: function (userConfig) {
-            // ... (No changes here, code is the same)
+            // Wait for the DOM to be ready before starting
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => init(userConfig));
             } else {
