@@ -1,6 +1,7 @@
 const express = require('express')
 const morgan = require('morgan')
 const cors = require('cors')
+require('./tests.js')
 const path = require('path')
 const app = express()
 const bodyParser1 = require('body-parser')
@@ -9,7 +10,7 @@ const rateLimit = require('express-rate-limit')
 const limiter = rateLimit({ windowMs: 60 * 1000, max: 1500, keyGenerator: (req) => req.ip })
 
 //routes
-const suggestions = require('./suggestions.js')
+const { suggestionRouter } = require('./suggestions.js')
 
 app.set('view engine', 'ejs')
 app.use(helmet())
@@ -34,10 +35,7 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   next()
 })
-app.use('/suggestions', suggestions)
-app.get('/test', async (req, res) => {
-  res.json({ message: 'Hello World' })
-})
+app.use('/suggestions', suggestionRouter)
 
 app.use((req, res, next) => {
   const error = new Error('pikmeTV - Not found')

@@ -1,12 +1,12 @@
 const express = require('express')
 const OpenAI = require("openai")
 const openai = new OpenAI({ apiKey: process.env.aiKey })
-const router = express.Router()
+const suggestionRouter = express.Router()
 const systemPrompt = require('./prompt')
 
-router.post('/offer-suggestion', async (req, res) => {
+suggestionRouter.post('/offer-suggestion', async (req, res) => {
     try {
-        const { session } = req.body
+        const session  = req.body
         const response = await analizeSession(session)
         return res.json(response)
     }
@@ -29,8 +29,10 @@ async function analizeSession(session) {
 
     const llmResponse = completion.choices[0].message.content;
     console.log(llmResponse)
-
     return JSON.parse(llmResponse)
 }
 
-module.exports = router
+module.exports = {
+    suggestionRouter,
+    analizeSession
+}

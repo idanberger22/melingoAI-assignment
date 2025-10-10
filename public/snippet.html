@@ -1,27 +1,19 @@
-
 <script>
-  (function() {
-    // A simple configuration object
+  (function () {
     const trackerConfig = {
-      // This could be a unique ID for the store
-      siteId: 'BergerStore', 
-      // The URL where your main tracker.js file is hosted
-      scriptUrl: 'https://melingoai-assignment.onrender.com/tracker.js' 
-    };
-
-    // Create a script element to load the main tracker
-    const script = document.createElement('script');
+      scriptUrl: 'http://localhost:3029/tracker.js',
+      modalBackgroundColor: '#FFFFFF', // background color of the modal
+      modalTextColor: '#000000', // text color of the modal
+    }
+    const script = document.createElement('script')
     script.src = trackerConfig.scriptUrl;
     script.async = true;
-    
-    // Pass config to the tracker script once it loads
-    script.onload = function() {
+    script.onload = function () {
       if (window.EngagementTracker) {
-        window.EngagementTracker.init(trackerConfig);
+        window.EngagementTracker.init(trackerConfig)
+        console.log('Tracker initialized')
       }
-    };
-
-    // Append the script to the head
+    }
     document.head.appendChild(script);
   })();
 </script>
