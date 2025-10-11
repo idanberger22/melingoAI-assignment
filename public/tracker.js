@@ -7,15 +7,19 @@ window.EngagementTracker = (function () {
         pageViewStartTime: null,
         backendUrl: '',
         isPopupVisible: false,
-        hesitationTimer: null,
+        hesitationTimer: null, // For product pages
         exitIntentFired: false,
         isRequestPending: false,
         lastRequestTimestamp: 0,
         modalBackgroundColor: '#FFFFFF',
         modalTextColor: '#000000',
+        // --- NEW STATE for Cart Drawer ---
+        isCartOpen: false,
+        cartHesitationTimer: null
     }
 
     const HESITATION_DELAY_MS = 60000 // 60 seconds
+    const CART_INACTIVITY_DELAY_MS = 90000 // 90 seconds
     const COOLDOWN_PERIOD_MS = 30000 // 30 seconds between server calls
 
     function log(...args) {
@@ -80,17 +84,17 @@ window.EngagementTracker = (function () {
         state.isRequestPending = true
         state.lastRequestTimestamp = now
 
-        const cartItems = await getCartItemCount()
+        const cart = await getCart()
         const timeOnSite = Math.round((Date.now() - state.sessionStartTime) / 1000)
 
         const session = {
             events: state.events,
             currentPage: window.location.pathname,
-            cart: { itemCount: cartItems },
+            cart,
             timeOnSite: timeOnSite
         }
 
-        log("analizing session for possible suggestion...", session)
+        log("Analyzing session for possible suggestion...", session)
 
         try {
             const response = await fetch(state.backendUrl, {
@@ -166,17 +170,23 @@ window.EngagementTracker = (function () {
             lineHeight: '1'
         })
 
-        closeBtn.addEventListener('click', closePopup)
-        overlay.addEventListener('click', closePopup)
+        const messageEl = document.createElement('div')
+        messageEl.textContent = message
 
         function closePopup() {
             state.isPopupVisible = false
             overlay.style.opacity = '0'
             setTimeout(() => overlay.remove(), 300)
         }
+        
+        closeBtn.addEventListener('click', closePopup)
+        // Close on overlay click, but not on popup click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closePopup();
+            }
+        });
 
-        const messageEl = document.createElement('div')
-        messageEl.textContent = message
         popup.appendChild(closeBtn)
         popup.appendChild(messageEl)
         overlay.appendChild(popup)
@@ -186,26 +196,74 @@ window.EngagementTracker = (function () {
         })
     }
 
-    //tracker functions :
+    // --- MODIFIED & NEW TRACKER FUNCTIONS ---
 
     function attachEventListeners() {
         document.body.addEventListener('click', handleGlobalClick, true)
         window.addEventListener('beforeunload', updateLastPageViewTime)
         document.documentElement.addEventListener('mouseleave', handleExitIntent)
+        observeCartDrawerAndBody(); // <-- NEW: Start the observer
         log('Event listeners attached.')
     }
 
-    async function getCartItemCount() {
+    // --- NEW: Function to check if cart drawer is open using a list of selectors ---
+    function isCartDrawerOpen() {
+        const cartSelectors = [
+            'cart-drawer[open]', '#CartDrawer[open]', '#CartDrawer.is-open',
+            '.drawer.drawer--cart.is-open', '.drawer--cart.is-open', '.cart-drawer.is-open',
+            '.ajaxcart.is-visible', '.cart-popup-wrapper.is-active', '[data-cart-popup].is-active',
+            '#CartPopup.is-active', 'cart-notification[open]', 'details[id*="Cart"][open]',
+            'details[id*="Drawer"][open]', '.site-header__cart--active', '.js-drawer-open'
+        ];
+        return cartSelectors.some(selector => document.querySelector(selector));
+    }
+
+    // --- NEW: MutationObserver to watch for cart drawer changes ---
+    function observeCartDrawerAndBody() {
+        const observer = new MutationObserver(() => {
+            const isNowOpen = isCartDrawerOpen();
+
+            if (isNowOpen && !state.isCartOpen) {
+                // Cart has just opened
+                state.isCartOpen = true;
+                log('Strategy: Cart drawer opened.');
+                addEvent({ type: 'cart_opened' });
+
+                getSuggestion(); // Initial check for high-value cart
+
+                if (state.cartHesitationTimer) clearTimeout(state.cartHesitationTimer);
+                state.cartHesitationTimer = setTimeout(() => {
+                    log("Strategy: Cart inactivity timer fired. Triggering server check for discount offer.");
+                    addEvent({ type: 'cart_hesitation' });
+                    getSuggestion();
+                }, CART_INACTIVITY_DELAY_MS);
+
+            } else if (!isNowOpen && state.isCartOpen) {
+                // Cart has just closed
+                state.isCartOpen = false;
+                log('Cart drawer closed.');
+                addEvent({ type: 'cart_closed' });
+                if (state.cartHesitationTimer) {
+                    clearTimeout(state.cartHesitationTimer);
+                    log('Cart inactivity timer cleared.');
+                }
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+        log('Cart drawer observer is now active.');
+    }
+
+    async function getCart() {
         try {
             const response = await fetch('/cart.js')
-            if (!response.ok) return 0
+            if (!response.ok) return { itemCount: 0, items: [] };
             const cart = await response.json()
-            log('Fetched cart:', JSON.stringify(cart))
-            return cart.item_count || 0
+            return { itemCount: cart.item_count || 0, items: cart.items || [] }
         }
         catch (error) {
-            errorLog('Could not fetch cart count.', error)
-            return 0
+            errorLog('Could not fetch cart data.', error)
+            return { itemCount: 0, items: [] };
         }
     }
 
@@ -225,7 +283,7 @@ window.EngagementTracker = (function () {
         updateLastPageViewTime()
 
         if (state.hesitationTimer) {
-            log('New page view. Clearing previous hesitation timer.')
+            log('New page view. Clearing previous page hesitation timer.')
             clearTimeout(state.hesitationTimer)
         }
         state.exitIntentFired = false
@@ -234,41 +292,44 @@ window.EngagementTracker = (function () {
         addEvent({ type: 'page_view', page: currentPath, time_on_page: 0 })
 
         // --- STRATEGIC TRIGGER LOGIC ---
-
-        // ★ ROBUST PAGE DETECTION ★
-        if (currentPath.includes('/cart')) {
-            log("Strategy: On Cart Page. Triggering server check.")
-            getSuggestion()
-        }
-
-        // ★ ROBUST PAGE DETECTION ★
+        // (The cart logic is now handled by the MutationObserver)
         if (currentPath.includes('/products/')) {
             log(`Strategy: On Product Page. Starting ${HESITATION_DELAY_MS / 1000}s hesitation timer.`)
             state.hesitationTimer = setTimeout(() => {
-                log("Strategy: Hesitation timer fired. Triggering server check.")
+                log("Strategy: Product hesitation timer fired. Triggering server check.")
                 addEvent({ type: 'hesitation', on_page: currentPath })
                 getSuggestion()
             }, HESITATION_DELAY_MS)
         }
     }
 
+    // --- MODIFIED handleGlobalClick: Added filter detection ---
     function handleGlobalClick(e) {
-        log('Global click detected on:', e.target)
-        const addToCartButton = e.target.closest('[name="add"], [type="submit"], .add-to-cart')
-        const form = e.target.closest('form[action*="/cart/add"]')
-        let clickType = null
+        const filterElement = e.target.closest('a[href*="?filter"], .facet-filters__field input, .filter-group input, .collection-sidebar__filter input');
+        
+        if (filterElement) {
+            const filterDetail = filterElement.closest('label')?.textContent.trim() || filterElement.name || filterElement.id;
+            addEvent({ type: 'click', element: 'filter', detail: filterDetail });
 
-        if (addToCartButton || form) {
-            clickType = 'add_to_cart'
+            const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString();
+            const recentFilterClicks = state.events.filter(event =>
+                event.type === 'click' && event.element === 'filter' && event.timestamp > sixtySecondsAgo
+            ).length;
+
+            if (recentFilterClicks >= 3) {
+                log(`Strategy: Filter confusion detected (${recentFilterClicks} clicks). Triggering server check.`);
+                setTimeout(() => getSuggestion(), 250);
+            }
+            return; // Exit after processing filter click
         }
 
-        if (clickType) {
-            addEvent({ type: 'click', element: clickType })
-            // TRIGGER 3: High-Intent Click
-            if (clickType === 'add_to_cart') {
-                log("Strategy: 'Add to Cart' click detected. Triggering server check after 500ms delay.")
-                setTimeout(() => getSuggestion(), 500)
-            }
+        const addToCartButton = e.target.closest('[name="add"], [type="submit"], .add-to-cart, form[action*="/cart/add"] button[type="submit"]');
+        const form = e.target.closest('form[action*="/cart/add"]');
+
+        if (addToCartButton || form) {
+            addEvent({ type: 'click', element: 'add_to_cart' });
+            log("Strategy: 'Add to Cart' click detected. Triggering server check after 500ms delay to allow cart to update.");
+            setTimeout(() => getSuggestion(), 500);
         }
     }
 
@@ -283,8 +344,8 @@ window.EngagementTracker = (function () {
 
     return {
         init: function (userConfig) {
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => init(userConfig))
-            else init(userConfig)
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => init(userConfig));
+            else init(userConfig); 
         }
     }
 })();
