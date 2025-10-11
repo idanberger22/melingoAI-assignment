@@ -1,4 +1,4 @@
-const { analizeSession } = require('./suggestions.js')
+const { analizeSession } = require('../routes/suggestions.js')
 
 // runSessionTests()
 async function runSessionTests() {

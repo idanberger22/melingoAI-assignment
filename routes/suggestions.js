@@ -2,7 +2,7 @@ const express = require('express')
 const OpenAI = require("openai")
 const openai = new OpenAI({ apiKey: process.env.aiKey })
 const suggestionRouter = express.Router()
-const systemPrompt = require('./prompt')
+const systemPrompt = require('../prompt')
 
 suggestionRouter.post('/offer-suggestion', async (req, res) => {
     try {

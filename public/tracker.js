@@ -91,7 +91,6 @@ window.EngagementTracker = (function () {
         }
 
         log("analizing session for possible suggestion...", session)
-        log('cart items: ', cartItems)
 
         try {
             const response = await fetch(state.backendUrl, {
@@ -199,12 +198,9 @@ window.EngagementTracker = (function () {
     async function getCartItemCount() {
         try {
             const response = await fetch('/cart.js')
-            if (!response.ok) {
-                log('Could not fetch cart.js, assuming 0 items.')
-                return 0
-            }
+            if (!response.ok) return 0
             const cart = await response.json()
-            log('Fetched cart count:', cart.item_count)
+            log('Fetched cart:', JSON.stringify(cart))
             return cart.item_count || 0
         }
         catch (error) {

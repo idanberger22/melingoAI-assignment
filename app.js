@@ -1,7 +1,7 @@
 const express = require('express')
 const morgan = require('morgan')
 const cors = require('cors')
-require('./tests.js')
+require('./tests/suggestions.js')
 const path = require('path')
 const app = express()
 const bodyParser1 = require('body-parser')
@@ -10,7 +10,7 @@ const rateLimit = require('express-rate-limit')
 const limiter = rateLimit({ windowMs: 60 * 1000, max: 1500, keyGenerator: (req) => req.ip })
 
 //routes
-const { suggestionRouter } = require('./suggestions.js')
+const { suggestionRouter } = require('./routes/suggestions.js')
 
 app.set('view engine', 'ejs')
 app.use(helmet())
