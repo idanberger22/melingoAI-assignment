@@ -91,6 +91,7 @@ window.EngagementTracker = (function () {
         }
 
         log("analizing session for possible suggestion...", session)
+        log('cart items: ', cartItems)
 
         try {
             const response = await fetch(state.backendUrl, {
