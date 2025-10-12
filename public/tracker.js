@@ -431,14 +431,8 @@ window.EngagementTracker = (function () {
     // CART DRAWER (Shopify)
     // ========================
     function isLikelyCartDrawerOpen() {
-        // Common theme selectors
-        const candidates = [
-            '#CartDrawer', '#cart-drawer', '.cart-drawer', '[data-cart-drawer]',
-            '[aria-label="Cart"]', '[data-drawer="cart"]', '[id*="CartDrawer"]', '[id*="cart-drawer"]',
-            '[data-cart-modal]', '.cart-modal', '#cart-modal',
-            '.mini-cart', '#mini-cart', '.ajaxcart'
-        ];
-        for (const sel of candidates) {
+        const selectors = [ '.cart-drawer--empty', '.cart-drawer__inner'] //currently works for dawn theme
+        for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (visible(el)) return true;
         }
@@ -478,9 +472,9 @@ window.EngagementTracker = (function () {
             if (cart.itemCount >= 3) {
                 getSuggestion("high_value_cart_confidence");
             }
-
             startCartInactivityTimer();
-        } else if (!open && state.isCartOpen) {
+        } 
+        else if (!open && state.isCartOpen) {
             state.isCartOpen = false;
             clearTimeout(state.cartInactivityTimer);
             addEvent({ type: "cart_drawer_close" });
