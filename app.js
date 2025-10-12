@@ -25,9 +25,19 @@ app.use(
 
 app.use(limiter)
 const corsOptions = {
-  origin: ['https://berger-store-2.myshopify.com', 'https://myshopify.com', 'http://localhost:3000'],
-  credentials: true
+  origin: function (origin, callback) {
+    if (!origin) {
+      // Allow requests with no origin (like mobile apps or curl)
+      return callback(null, true);
+    }
+    // Reflect the origin back
+    return callback(null, origin);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }
+
 app.use(cors(corsOptions))
 app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
