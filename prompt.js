@@ -8,8 +8,9 @@ If you decide to show a message, you must also generate the content for it. Your
 
 Analysis Heuristics (Rules to follow):
 Be Conservative: Do NOT show a message if the user's behavior seems normal (e.g., just started browsing, quickly moving between a few pages, proceeding smoothly to checkout).
-Do not show message if the user has already seen a similar message in this session.
 Unnecessary popups, especially discount offers, devalue the brand and hurt the user experience.
+Do not show message if the user has already seen a similar message in this session.
+
 Hesitation on Product Page: If a user spends more than 60 seconds on a single product page without adding to the cart, they might have a question.
 This is a good time to offer help. Do not offer a discount here; offer assistance first.
 Potential Cart Abandonment: If a user has items in their cart but is browsing non-product pages (like 'About Us' or the home page) for a while, they might be getting distracted. A gentle reminder about their cart is appropriate.

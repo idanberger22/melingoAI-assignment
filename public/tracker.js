@@ -14,6 +14,7 @@ window.EngagementTracker = (function () {
         isRequestPending: false,
         lastRequestTimestamp: 0,
         analysesThisSession: 0,
+        debug: true,
 
         // Cart state
         isCartOpen: false,
@@ -44,14 +45,14 @@ window.EngagementTracker = (function () {
     const CONFUSION_WINDOW_MS = 25_000;             // Lookback window for filters/search
     const CONFUSION_MIN_ACTIONS = 5;                // Actions within window to trigger
     const COOLDOWN_PERIOD_MS = 30_000;              // Min gap between analyses
-    const MAX_ANALYSES_PER_SESSION = 10;             // Hard cap per session
+    const MAX_ANALYSES_PER_SESSION = 6;             // Hard cap per session
     const EVENTS_MAX_LENGTH = 50;                    // Max length of events array
 
     // ========================
     // HELPERS
     // ========================
-    function log(...args) { console.log("[event tracker]", ...args); }
-    function errorLog(...args) { console.error("[event tracker]", ...args); }
+    function log(...args) { if (state.debug) console.log("[event tracker]", ...args); }
+    function errorLog(...args) { if (state.debug) console.error("[event tracker]", ...args); }
 
     async function getCart() {
         try {
@@ -112,6 +113,7 @@ window.EngagementTracker = (function () {
     }
 
     function canAnalyze() {
+        if (!state.backendUrl) { errorLog("No backendUrl configured; aborting analysis"); return false; }
         if (state.analysesThisSession >= MAX_ANALYSES_PER_SESSION) { log("Analysis gated: max per session reached."); return false; }
         if (state.isRequestPending) { log("Analysis gated: request already pending."); return false; }
         if (Date.now() - state.lastRequestTimestamp < COOLDOWN_PERIOD_MS) { log("Analysis gated: cooldown period."); return false; }
@@ -173,8 +175,10 @@ window.EngagementTracker = (function () {
             state.backendUrl = `${baseUrl}/suggestions/offer-suggestion`;
             state.modalBackgroundColor = config.modalBackgroundColor || "#FFFFFF";
             state.modalTextColor = config.modalTextColor || "#000000";
+            state.debug = config.debug || false;
             log("Backend URL:", state.backendUrl);
-        } catch (e) {
+        }
+        catch (e) {
             errorLog("Invalid scriptUrl; aborting init.", config.scriptUrl, e);
             return;
         }
@@ -429,8 +433,10 @@ window.EngagementTracker = (function () {
     function isLikelyCartDrawerOpen() {
         // Common theme selectors
         const candidates = [
-            '#CartDrawer', '#cart-drawer', '.cart-drawer', '[data-cart-drawer]', '[aria-label="Cart"]',
-            '[data-drawer="cart"]', '[id*="CartDrawer"]', '[id*="cart-drawer"]'
+            '#CartDrawer', '#cart-drawer', '.cart-drawer', '[data-cart-drawer]',
+            '[aria-label="Cart"]', '[data-drawer="cart"]', '[id*="CartDrawer"]', '[id*="cart-drawer"]',
+            '[data-cart-modal]', '.cart-modal', '#cart-modal',
+            '.mini-cart', '#mini-cart', '.ajaxcart'
         ];
         for (const sel of candidates) {
             const el = document.querySelector(sel);

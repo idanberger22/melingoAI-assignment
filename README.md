@@ -1,10 +1,5 @@
 # Proactive Engagement System for Shopify
 
-> **Convert more, without being annoying.**  
-> Lightweight tracker + Node/Express backend + LLM-driven decisions.
-
----
-
 ## 🚀 Setup (Backend)
 
 **Requirements:** Node.js 18+, npm
@@ -50,19 +45,24 @@ npm start
 
 ```html
 <script>
-(function(){
-  const trackerConfig = {
-    scriptUrl: 'https://melingoai-assignment.onrender.com',
-    modalBackgroundColor: '#FFFFFF',
-    modalTextColor: '#000000',
-    debug: true // turn off in prod
-  };
-  const s = document.createElement('script');
-  s.src = trackerConfig.scriptUrl + '/tracker.js';
-  s.async = true;
-  s.onload = () => window.EngagementTracker && window.EngagementTracker.init(trackerConfig);
-  document.head.appendChild(s);
-})();
+  (function () {
+    const trackerConfig = {
+      scriptUrl: 'https://melingoai-assignment.onrender.com', // backend service url
+      modalBackgroundColor: '#FFFFFF', // background color of the modal
+      modalTextColor: '#000000', // text color of the modal
+      debug: true // should display logs for debugging
+    }
+    const script = document.createElement('script')
+    script.src = trackerConfig.scriptUrl + '/tracker.js'
+    script.async = true
+    script.onload = function () {
+      if (window.EngagementTracker) {
+        window.EngagementTracker.init(trackerConfig)
+        console.log('Tracker initialized')
+      }
+    }
+    document.head.appendChild(script)
+  })();
 </script>
 ```
 
@@ -108,4 +108,5 @@ npm start
   "reasoning": "60+ seconds on PDP without ATC; assistance is appropriate."
 }
 ```
-# melingoAI-assignment
+**note : I did not include openAI api keys, as they are linked to payment method.
+The backend service is hosted on https://melingoai-assignment.onrender.com where you can test the project.
