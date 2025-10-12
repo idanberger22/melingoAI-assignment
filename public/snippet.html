@@ -1,0 +1,19 @@
+<script>
+  (function () {
+    const trackerConfig = {
+      scriptUrl: 'https://melingoai-assignment.onrender.com', // backend service url
+      modalBackgroundColor: '#FFFFFF', // background color of the modal
+      modalTextColor: '#000000', // text color of the modal
+    }
+    const script = document.createElement('script')
+    script.src = trackerConfig.scriptUrl + '/tracker.js'
+    script.async = true
+    script.onload = function () {
+      if (window.EngagementTracker) {
+        window.EngagementTracker.init(trackerConfig)
+        console.log('Tracker initialized')
+      }
+    }
+    document.head.appendChild(script)
+  })();
+</script>
